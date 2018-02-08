@@ -102,14 +102,16 @@ namespace bmp {
         //proxy class through which the bitmap is modified
         template<std::size_t _width, std::size_t _height> class pixel {
             public:
+                pixel(typename bmp<_width, _height>::iterator pixel_location);
+
                 //gets value of pixel
                 std::uint8_t red() const;
                 std::uint8_t green() const;
                 std::uint8_t blue() const;
                 //sets value of pixel
-                void red(std::uint8_t);
-                void green(std::uint8_t);
-                void blue(std::uint8_t);
+                void red(std::uint8_t val);
+                void green(std::uint8_t val);
+                void blue(std::uint8_t val);
             private:
                 typename bmp<_width, _height>::iterator pixel_location;
         };
@@ -171,6 +173,8 @@ namespace bmp {
         private:
             //iterator of underlying array
             typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator;
+            //the pixel class is used to modify the underlying array
+            friend class details::pixel<_width, _height>;
         };
         private:
         details::bitmapdata<_width, _height> _data;
