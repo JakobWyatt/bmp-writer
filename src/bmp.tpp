@@ -17,9 +17,13 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <ostream>
+#include <memory>
 
 namespace bmp {
-
+    //
+    // impl of pixel class
+    //
     template<std::size_t _width, std::size_t _height>
     details::pixel<_width, _height>::pixel(typename bmp<_width, _height>::iterator pixel_location)
     : pixel_location(pixel_location) {}
@@ -56,6 +60,104 @@ namespace bmp {
     template<std::size_t _width, std::size_t _height>
     std::uint8_t details::pixel<_width, _height>::blue() const {
         return *pixel_location._iterator;
+    }
+
+    //
+    //impl of bmp::row_proxy
+    //
+    template<std::size_t _width, std::size_t _height>
+    bmp<_width, _height>::row_proxy::row_proxy(iterator row)
+    : row(row) {}
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::reference bmp<_width, _height>::row_proxy::operator[](size_type column) {
+        return *(row + column);
+    }
+
+    //
+    // impl of bmp class
+    //
+    template<std::size_t _width, std::size_t _height>
+    std::ostream& bmp<_width, _height>::write(std::ostream& ofstream) const {
+        //this function writes the char array directly to the underlying stream
+        ofstream.write(reinterpret_cast<char*>(&_data), sizeof(_data));
+        return ofstream;
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::row_proxy bmp<_width, _height>::operator[](size_type row) {
+        //we construct row_proxy with an iterator pointing to the start of the row
+        //the image is stored bottom to top
+        return row_proxy(begin() + _width * (_height - 1 - row));
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator bmp<_width, _height>::begin() {
+        return iterator(_data.bitmap_array.begin());
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator bmp<_width, _height>::end() {
+        return iterator(_data.bitmap_array.end() - details::bitmap_array_pad_width<_width, _height>());
+    }
+
+    //
+    // impl of bmp::iterator
+    //
+    template<std::size_t _width, std::size_t _height>
+    bmp<_width, _height>::iterator::iterator
+    (typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator)
+    : _iterator(_iterator) {}
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator::reference bmp<_width, _height>::iterator::operator*() const {
+        return details::pixel<_width, _height>::pixel(*this);
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator::pointer bmp<_width, _height>::iterator::operator->() const {
+        return std::make_unique(
+            details::pixel<_width, _height>::pixel(*this)
+        );
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator& bmp<_width, _height>::iterator::operator++() {
+        auto index = _iterator - _data.bitmap_array.begin();
+        //if we are at the end of the row, move to the next row
+        //  else move to the next pixel
+        if (details::end_of_row<_width, _height>()) {
+            _iterator += details::bitmap_array_pad_width<_width, _height>() + 3;
+        } else {
+            _iterator += 3;
+        }
+        return *this;
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator bmp<_width, _height>::iterator::operator++(int) {
+        auto tmp = iteartor(_iterator);
+        ++(*this);
+        return tmp;
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator& bmp<_width, _height>::iterator::operator--() {
+        //if we are at the start of a row, move to the previous row
+        //else move to the previous pixel
+        if (details::start_of_row<_width, _height>()) {
+            _iterator -= details::bitmap_array_pad_width<_width, _height>() - 3;
+        } else {
+            _iterator -= 3;
+        }
+        return *this;
+    }
+
+    template<std::size_t _width, std::size_t _height>
+    typename bmp<_width, _height>::iterator bmp<_width, _height>::iterator::operator--(int) {
+        auto tmp = iterator(_iterator);
+        --(*this);
+        return tmp;
     }
 
 }

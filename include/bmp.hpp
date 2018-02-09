@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <iterator>
+#include <memory>
 
 namespace bmp {
     //interface class for our bitmap POD struct
@@ -27,17 +28,55 @@ namespace bmp {
 
     //this namespace is not intended to be accessed by library users
     namespace details {
-        //calculates the size, in bytes, of a padded bitmap array
-        template<std::size_t _width, std::size_t _height> std::size_t constexpr bitmap_array_size() {
+        //
+        // helper functions
+        //
+
+        template<std::size_t _width, std::size_t _height> std::size_t constexpr data_bytes_per_row() {
+            //3 bytes per pixel
+            return _width * 3;
+        }
+
+        //calculates the size in bytes of a padded bitmap row
+        template<std::size_t _width, std::size_t _height> std::size_t constexpr bitmap_row_size() {
             //our bitmap array is stored row wise,
             //with 3 bytes per pixel
             //each row is padded to a multiple of 4 bytes
-            return (((_width * 3)         //find the number of data-storing bytes in our array
-                    + 3) / 4)             //use int truncation to find the number of multiples of 4 we have
-                    * 4 * _height;        //multiply by 4 to find the number of bytes in a row,
-                                          //then multiply by height to find the total number of bytes in the image
+            return ((data_bytes_per_row<_width, _height>()   //find the number of data-storing bytes per row
+                    + 3) / 4)                               //use int truncation to find the number of multiples of 4 we have
+                    * 4;                                    //multiply by 4 to find the number of bytes in a row
+        }
+
+        //calculates the size, in bytes, of a padded bitmap array
+        template<std::size_t _width, std::size_t _height> std::size_t constexpr bitmap_array_size() {
+            return bitmap_row_size<_width, _height>() * _height;
+        }
+
+        template<std::size_t _width, std::size_t _height> std::size_t constexpr bitmap_array_pad_width() {
+            return bitmap_row_size<_width, _height>() - (_width * 3);     //subtract by the number of data-storing bytes to find the pad width
         }
         
+        //determines if a 0-indexed element of a padded byte array
+        //  points to the last pixel in a row,
+        //  given that it points to a valid pixel
+        template<std::size_t _width, std::size_t _height> bool constexpr end_of_row(std::size_t elem) {
+            return 
+                (elem % bitmap_row_size<_width, _height>()) //reduce the problem to a single row
+                / 3                                         //find the 0-indexed pixel value from the start of the row
+             == (_width - 1);                            //check if this is the last pixel in the row
+        }
+
+        //determines if a 0-indexed element of a padded byte array
+        //  points to the first pixel in a row,
+        //  given that it points to a valid pixel
+        template<std::size_t _width, std::size_t _height> bool constexpr start_of_row(std::size_t elem) {
+            return (elem % bitmap_row_size<_width, _height>()) == 0;
+        }
+
+        //
+        // POD file structs
+        //
+
         //this POD struct defines info about our bitmap array
         #pragma pack(1)
         template<std::size_t _width, std::size_t _height> struct bitmapinfoheader {
@@ -127,16 +166,8 @@ namespace bmp {
         public:
         using value_type = details::pixel<_width, _height>;
         using size_type = std::size_t;
-        using reference = details::pixel<_width, _height>&;
-
-        //writes the images binary data to the given output stream
-        std::ostream& write(std::ostream&) const;
-
-        //correct usage is a double overload of operator[]
-        //eg bmp[1][3] will return a reference to a pixel object
-        //  located at the 2nd row and 4th column
-        //(0-indexing)
-        row_proxy operator[](size_type row);
+        //the reference is actually the proxy pixel object
+        using reference = details::pixel<_width, _height>;
 
         //we satisfy random_access_iterator here,
         //  might implement contiguous_iterator in future
@@ -144,7 +175,7 @@ namespace bmp {
         public:
             using difference_type = std::ptrdiff_t;
             using value_type = bmp::value_type;
-            using pointer = details::pixel<_width, _height>*;
+            using pointer = std::unique_ptr<details::pixel<_width, _height>>;
             using reference = bmp::reference;
             using iterator_category = std::random_access_iterator_tag;
 
@@ -171,23 +202,42 @@ namespace bmp {
             bool operator<=(iterator rhs) const;
             bool operator>=(iterator rhs) const;
         private:
+            //helper ctor for bmp
+            iterator(typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator);
             //iterator of underlying array
             typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator;
             //the pixel class is used to modify the underlying array
             friend class details::pixel<_width, _height>;
+            friend class bmp<_width, _height>;
         };
+
+        //writes the images binary data to the given output stream
+        std::ostream& write(std::ostream&) const;
+
+        //correct usage is a double overload of operator[]
+        //eg bmp[1][3] will return a reference to a pixel object
+        //  located at the 2nd row and 4th column
+        //(0-indexing)
+        row_proxy operator[](size_type row);
+
+        //iterator helper functions
+        iterator begin();
+        iterator end();
+
         private:
         details::bitmapdata<_width, _height> _data;
 
         class row_proxy {
         public:
+            row_proxy(iterator row);
+
             reference operator[](size_type column);
         private:
             iterator row;
         };
     };
 
-    //non-class operators for bmp::iterator
+    //non-class operators for bmp::iterator            using value_type = bmp::value_type;
     template<std::size_t _width, std::size_t _height>
     typename bmp<_width, _height>::iterator
     operator+(typename bmp<_width, _height>::iterator::difference_type lhs, typename bmp<_width, _height>::iterator rhs);
