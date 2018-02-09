@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <utility>
 
 namespace bmp {
     //interface class for our bitmap POD struct
@@ -59,7 +60,7 @@ namespace bmp {
         //determines if a 0-indexed element of a padded byte array
         //  points to the last pixel in a row,
         //  given that it points to a valid pixel
-        template<std::size_t _width, std::size_t _height> bool constexpr end_of_row(std::size_t elem) {
+        template<std::size_t _width, std::size_t _height> bool end_of_row(std::size_t elem) {
             return 
                 (elem % bitmap_row_size<_width, _height>()) //reduce the problem to a single row
                 / 3                                         //find the 0-indexed pixel value from the start of the row
@@ -69,7 +70,7 @@ namespace bmp {
         //determines if a 0-indexed element of a padded byte array
         //  points to the first pixel in a row,
         //  given that it points to a valid pixel
-        template<std::size_t _width, std::size_t _height> bool constexpr start_of_row(std::size_t elem) {
+        template<std::size_t _width, std::size_t _height> bool start_of_row(std::size_t elem) {
             return (elem % bitmap_row_size<_width, _height>()) == 0;
         }
 
@@ -201,15 +202,20 @@ namespace bmp {
             bool operator>(iterator rhs) const;
             bool operator<=(iterator rhs) const;
             bool operator>=(iterator rhs) const;
+
         private:
-            //helper ctor for bmp
-            iterator(typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator);
+            using raw_iter = typename std::array<std::uint8_t, details::bitmap_array_size<_width, _height>()>::iterator;
             //iterator of underlying array
-            typename details::bitmapdata<_width, _height>::bitmap_array::iterator _iterator;
+            raw_iter _iterator;
+            //begin iterator of underlying array for padding calculation
+            raw_iter _begin;
+            //helper ctor for bmp
+            iterator(raw_iter _iterator, raw_iter _begin) : _iterator(_iterator), _begin(_begin) {}
             //the pixel class is used to modify the underlying array
             friend class details::pixel<_width, _height>;
             friend class bmp<_width, _height>;
-        };
+            
+            };
 
         //writes the images binary data to the given output stream
         std::ostream& write(std::ostream&) const;

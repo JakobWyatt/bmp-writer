@@ -13,12 +13,35 @@
 //   limitations under the License.
 
 #include <fstream>
+#include <iostream>
+#include <ostream>
+#include <utility>
 #include "../include/bmp.hpp"
 
+std::pair<std::ostream&, std::ostream&> test_suite(std::ostream& ofstream, std::ostream& cout) {
+    std::cout << "\nStarting tests...\n";
+
+    bmp::bmp<5, 10> image;
+
+    auto it = image.begin();
+    auto end = image.end();
+
+    for(int i = 0; it != end; ++it) {
+        (*it).green(i);
+        (*it).blue(i);
+        (*it).red(i);
+        i += 5;
+    }
+
+    image.write(ofstream);
+
+    return std::make_pair(std::ref(ofstream), std::ref(cout));
+}
+
 int main() {
-    std::ofstream file("test.bmp", std::ios_base::binary);
-    bmp::details::bitmapdata<2, 2> bitmap;
-    bitmap.bitmap_array = {255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0, 0, 0, 0, 0};
-    file.write(reinterpret_cast<char*>(&bitmap), sizeof(bitmap));
+    std::ofstream file("testiter.bmp", std::ios_base::binary);
+    
+    test_suite(file, std::cout);
+
     return 0;
 }
